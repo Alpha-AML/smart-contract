@@ -13,7 +13,9 @@ contract AlphaAMLBridge is Ownable {
     struct Request {
         address user;
         IERC20 token;
-        uint256 amount;
+        uint256 amountFromSender;
+        uint256 amountToRecipient;
+        uint256 fee;
         address recipient;
         uint256 riskScore;
         Status status;
@@ -38,6 +40,7 @@ contract AlphaAMLBridge is Ownable {
         address indexed user,
         address token,
         uint256 amount,
+        uint256 fee,
         address recipient
     );
     event Cancelled(uint256 indexed requestId);
@@ -61,7 +64,7 @@ contract AlphaAMLBridge is Ownable {
 
     /// @param _oracle       the oracle EOA
     /// @param _gasDeposit   exact ETH (in wei) required per request
-    /// @param _feeRecipient address that collects 0.1% fees
+    /// @param _feeRecipient address that collects fees
     constructor(
         address _oracle,
         uint256 _gasDeposit,
@@ -74,22 +77,6 @@ contract AlphaAMLBridge is Ownable {
         oracle = _oracle;
         gasDeposit = _gasDeposit;
         feeRecipient = _feeRecipient;
-    }
-
-    /// @notice Initialize supported tokens after deployment
-    function initializeSupportedTokens() external onlyOwner {
-        // USDT on Arbitrum
-        supportedTokens[0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9] = true;
-        // USDC Native on Arbitrum  
-        supportedTokens[0xaf88d065e77c8cC2239327C5EDb3A432268e5831] = true;
-        // USDC.e Bridged on Arbitrum
-        supportedTokens[0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8] = true;
-        
-        supportedTokensLength = 3;
-        
-        emit TokenSupportUpdated(0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9, true);
-        emit TokenSupportUpdated(0xaf88d065e77c8cC2239327C5EDb3A432268e5831, true);
-        emit TokenSupportUpdated(0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8, true);
     }
 
     function setOracle(address _oracle) external onlyOwner {
@@ -200,20 +187,26 @@ contract AlphaAMLBridge is Ownable {
         require(supportedTokensLength > 0 && supportedTokens[token], "Token not supported");
 
         uint256 requestId = nextRequestId++;
-        Request storage r = requests[requestId];
-        r.user       = msg.sender;
-        r.token      = IERC20(token);
-        r.amount     = amount;
-        r.recipient  = recipient;
-        r.status     = Status.Pending;
-        r.depositEth = msg.value;
+        // Calculating fees based on the final recipient amount
+        uint256 fee = (amount * feeBP) / 10000;
+        uint256 amountFromSender = amount + fee;
 
-        r.token.safeTransferFrom(msg.sender, address(this), amount);
+        Request storage r   = requests[requestId];
+        r.user              = msg.sender;
+        r.token             = IERC20(token);
+        r.amountFromSender  = amountFromSender;
+        r.amountToRecipient = amount;
+        r.fee               = fee;
+        r.recipient         = recipient;
+        r.status            = Status.Pending;
+        r.depositEth        = msg.value;
+
+        r.token.safeTransferFrom(msg.sender, address(this), amountFromSender);
         
         // Send ETH directly to oracle
         payable(oracle).transfer(msg.value);
         
-        emit Initiated(requestId, msg.sender, token, amount, recipient);
+        emit Initiated(requestId, msg.sender, token, amountFromSender, fee, recipient);
     }
 
     /// @notice User can cancel their own request, or contract owner can cancel any request
@@ -225,7 +218,7 @@ contract AlphaAMLBridge is Ownable {
         r.status = Status.Cancelled;
 
         // refund tokens (ETH was already sent to oracle)
-        r.token.safeTransfer(r.user, r.amount);
+        r.token.safeTransfer(r.user, r.amountFromSender);
 
         emit Cancelled(requestId);
     }
@@ -249,13 +242,11 @@ contract AlphaAMLBridge is Ownable {
 
         bool approved = r.riskScore < riskThreshold;
         if (approved) {
-            uint256 fee = (r.amount * feeBP) / 10000;
-            uint256 net = r.amount - fee;
-            r.token.safeTransfer(feeRecipient, fee);
-            r.token.safeTransfer(r.recipient, net);
+            r.token.safeTransfer(feeRecipient, r.fee);
+            r.token.safeTransfer(r.recipient, r.amountToRecipient);
         } else {
             // failed check → return full amount to user
-            r.token.safeTransfer(r.user, r.amount);
+            r.token.safeTransfer(r.user, r.amountFromSender);
         }
 
         emit Executed(requestId, approved);
