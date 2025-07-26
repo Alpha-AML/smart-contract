@@ -269,6 +269,7 @@ contract AlphaAMLBridge is Ownable {
         Request storage r = requests[requestId];
         require(r.status == Status.Initiated, "Not initiated");
         r.riskScore = riskScore;
+        r.status = Status.Pending;
         emit RiskScoreSet(requestId, riskScore);
     }
 
