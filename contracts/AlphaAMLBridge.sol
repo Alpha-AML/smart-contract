@@ -217,7 +217,7 @@ contract AlphaAMLBridge is Ownable {
     function cancel(uint256 requestId) external {
         Request storage r = requests[requestId];
         require(msg.sender == r.sender || msg.sender == owner(), "Not authorized");
-        require(r.status == Status.Pending, "Not pending");
+        require(r.status == Status.Initiated || r.status == Status.Pending, "Not pending nor initiated");
 
         r.status = Status.Cancelled;
 
