@@ -108,7 +108,7 @@ contract AlphaAMLBridge is Ownable {
     uint256 private _nextRequestId = 1;
     
     /// Mapping from request ID to request details
-    mapping(uint256 => Request) public requests;
+    mapping(uint256 => Request) private _requests;
 
     /// Set of whitelisted addresses
     EnumerableSet.AddressSet private _sendersWhitelist;
@@ -150,6 +150,8 @@ contract AlphaAMLBridge is Ownable {
     {
         require(_oracle != address(0), "Oracle=0");
         require(_feeRecipient != address(0), "FeeRecipient=0");
+        require(_gasPaymentsRecipient != address(0), "GasPaymentsRecipient=0");
+        require(_gasDeposit > 0, "GasDeposit=0");
         oracle = _oracle;
         gasDeposit = _gasDeposit;
         feeRecipient = _feeRecipient;
@@ -174,7 +176,6 @@ contract AlphaAMLBridge is Ownable {
         address recipient
     ) external payable onlyWhitelisted(msg.sender, recipient) {
         require(amount > 0, "Amount>0");
-        require(recipient != address(0), "Recipient=0");
         require(msg.value == gasDeposit, "Wrong gas deposit");
         require(_supportedTokens.contains(token), "Token not supported");
 
@@ -189,7 +190,7 @@ contract AlphaAMLBridge is Ownable {
         uint256 fee = (amount * feeBP) / BASIS_POINTS;
         uint256 amountFromSender = amount + fee;
 
-        Request storage r   = requests[requestId];
+        Request storage r   = _requests[requestId];
         r.sender            = msg.sender;
         r.status            = Status.Initiated;
         r.token             = token;
@@ -215,7 +216,7 @@ contract AlphaAMLBridge is Ownable {
      * @notice Refunds tokens to user (ETH was already sent to oracle)
      */
     function cancel(uint256 requestId) external {
-        Request storage r = requests[requestId];
+        Request storage r = _requests[requestId];
         require(msg.sender == r.sender || msg.sender == owner(), "Not authorized");
         require(r.status == Status.Initiated || r.status == Status.Pending, "Not pending nor initiated");
 
@@ -234,7 +235,7 @@ contract AlphaAMLBridge is Ownable {
      * @notice If rejected (risk score >= threshold): refunds full amount to user
      */
     function execute(uint256 requestId) external {
-        Request storage r = requests[requestId];
+        Request storage r = _requests[requestId];
         require(r.status == Status.Pending, "Not pending");
         r.status = Status.Executed;
 
@@ -266,7 +267,7 @@ contract AlphaAMLBridge is Ownable {
         external
         onlyOracle
     {
-        Request storage r = requests[requestId];
+        Request storage r = _requests[requestId];
         require(r.status == Status.Initiated, "Not initiated");
         r.riskScore = riskScore;
         r.status = Status.Pending;
@@ -348,6 +349,7 @@ contract AlphaAMLBridge is Ownable {
      */
     function setSupportedToken(address token, bool supported) external onlyOwner {
         require(token != address(0), "Token=0");
+        require(supported != _supportedTokens.contains(token), "Token already set");
         supported ? _supportedTokens.add(token) : _supportedTokens.remove(token);
         emit TokenSupportUpdated(token, supported);
     }
@@ -361,6 +363,12 @@ contract AlphaAMLBridge is Ownable {
         require(tokens.length == supported.length, "Array length mismatch");
         for (uint256 i = 0; i < tokens.length;) {
             require(tokens[i] != address(0), "Token=0");
+            if (supported[i] == _supportedTokens.contains(tokens[i])) {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
             supported[i] ? _supportedTokens.add(tokens[i]) : _supportedTokens.remove(tokens[i]);
             emit TokenSupportUpdated(tokens[i], supported[i]);
             unchecked {
@@ -375,6 +383,7 @@ contract AlphaAMLBridge is Ownable {
      */
     function addToSendersWhitelist(address user) external onlyOwner {
         require(user != address(0), "User=0");
+        require(!_sendersWhitelist.contains(user), "User already in whitelist");
         _sendersWhitelist.add(user);
         emit SendersWhitelistUpdated(user, true);
     }
@@ -385,6 +394,7 @@ contract AlphaAMLBridge is Ownable {
      */
     function addToRecipientsWhitelist(address user) external onlyOwner {
         require(user != address(0), "User=0");
+        require(!_recipientsWhitelist.contains(user), "User already in whitelist");
         _recipientsWhitelist.add(user);
         emit RecipientsWhitelistUpdated(user, true);
     }
@@ -396,6 +406,12 @@ contract AlphaAMLBridge is Ownable {
     function addToSendersWhitelistBatch(address[] calldata users) external onlyOwner {
         for (uint256 i = 0; i < users.length;) {
             require(users[i] != address(0), "User=0");
+            if (_sendersWhitelist.contains(users[i])) {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
             _sendersWhitelist.add(users[i]);
             emit SendersWhitelistUpdated(users[i], true);
             unchecked {
@@ -411,8 +427,17 @@ contract AlphaAMLBridge is Ownable {
     function addToRecipientsWhitelistBatch(address[] calldata users) external onlyOwner {
         for (uint256 i = 0; i < users.length;) {
             require(users[i] != address(0), "User=0");
+            if (_recipientsWhitelist.contains(users[i])) {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
             _recipientsWhitelist.add(users[i]);
             emit RecipientsWhitelistUpdated(users[i], true);
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -422,6 +447,12 @@ contract AlphaAMLBridge is Ownable {
      */
     function clearSendersWhitelist(address[] calldata usersToRemove) external onlyOwner {
         for (uint256 i = 0; i < usersToRemove.length;) {
+            if (!_sendersWhitelist.contains(usersToRemove[i])) {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
             _sendersWhitelist.remove(usersToRemove[i]);
             emit SendersWhitelistUpdated(usersToRemove[i], false);
             unchecked {
@@ -436,6 +467,12 @@ contract AlphaAMLBridge is Ownable {
      */
     function clearRecipientsWhitelist(address[] calldata usersToRemove) external onlyOwner {
         for (uint256 i = 0; i < usersToRemove.length;) {
+            if (!_recipientsWhitelist.contains(usersToRemove[i])) {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
             _recipientsWhitelist.remove(usersToRemove[i]);
             emit RecipientsWhitelistUpdated(usersToRemove[i], false);
             unchecked {
@@ -482,6 +519,7 @@ contract AlphaAMLBridge is Ownable {
      */
     function getSupportedTokensWithIndices(uint256 fromIdx, uint256 toIdx) external view returns (address[] memory tokens) {
         uint256 length = toIdx - fromIdx + 1;
+        tokens = new address[](length);  // ✅ Initialize the array with correct size!
         for (uint256 i = 0; i < length;) {
             tokens[i] = _supportedTokens.at(fromIdx + i);
             unchecked {
@@ -549,6 +587,7 @@ contract AlphaAMLBridge is Ownable {
      */
     function getSendersWhitelistWithIndices(uint256 fromIdx, uint256 toIdx) external view returns (address[] memory users) {
         uint256 length = toIdx - fromIdx + 1;
+        users = new address[](length);
         for (uint256 i = 0; i < length;) {
             users[i] = _sendersWhitelist.at(fromIdx + i);
             unchecked {
@@ -566,11 +605,16 @@ contract AlphaAMLBridge is Ownable {
      */
     function getRecipientsWhitelistWithIndices(uint256 fromIdx, uint256 toIdx) external view returns (address[] memory users) {
         uint256 length = toIdx - fromIdx + 1;
+        users = new address[](length);
         for (uint256 i = 0; i < length;) {
             users[i] = _recipientsWhitelist.at(fromIdx + i);
             unchecked {
                 ++i;
             }
         }
+    }
+
+    function requests(uint256 requestId) external view returns (Request memory) {
+        return _requests[requestId];
     }
 }
