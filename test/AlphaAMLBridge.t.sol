@@ -145,6 +145,12 @@ contract AlphaAMLBridgeTest is Test {
         bridge.setOracle(newOracle);
     }
 
+    function testSetOracleZeroAddress() public {
+        vm.expectRevert("Oracle=0");
+        vm.prank(address(owner));
+        bridge.setOracle(address(0));
+    }
+
     function testSetFeeBP() public {
         uint256 newFeeBP = 50; // 0.5%
 
