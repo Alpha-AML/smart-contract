@@ -18,52 +18,53 @@ contract AlphaAMLBridge is Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     /// Status of a transfer request
-    enum Status { None, Initiated, Pending, Cancelled, Executed }
+    enum Status {
+        None,
+        Initiated,
+        Pending,
+        Cancelled,
+        Executed
+    }
 
     /// Structure representing a transfer request
     struct Request {
-        address sender;                // Sender, who initiated the request
-        Status status;              // Current status of the request
-        address token;               // Token being transferred
-        uint96 riskScore;          // Risk score assigned by oracle (0-100)
-        address recipient;          // Destination address for the transfer
-        uint256 amountFromSender;   // Total amount deducted from sender (including fee)
-        uint256 amountToRecipient;  // Net amount recipient will receive
-        uint256 fee;                // Fee amount charged for the transfer
-        uint256 depositEth;         // ETH deposited for gas costs
+        address sender; // Sender, who initiated the request
+        Status status; // Current status of the request
+        address token; // Token being transferred
+        uint96 riskScore; // Risk score assigned by oracle (0-100)
+        address recipient; // Destination address for the transfer
+        uint256 amountFromSender; // Total amount deducted from sender (including fee)
+        uint256 amountToRecipient; // Net amount recipient will receive
+        uint256 fee; // Fee amount charged for the transfer
+        uint256 depositEth; // ETH deposited for gas costs
     }
 
     /// Emitted when a new transfer request is initiated
     event Initiated(
-        uint256 indexed requestId,
-        address indexed user,
-        address token,
-        uint256 amount,
-        uint256 fee,
-        address recipient
+        uint256 indexed requestId, address indexed user, address token, uint256 amount, uint256 fee, address recipient
     );
-    
+
     /// Emitted when a transfer request is cancelled
     event Cancelled(uint256 indexed requestId);
-    
+
     /// Emitted when oracle sets a risk score for a request
     event RiskScoreSet(uint256 indexed requestId, uint96 riskScore);
-    
+
     /// Emitted when a transfer request is executed
     event Executed(uint256 indexed requestId, bool approved);
-    
+
     /// Emitted when token support status is updated
     event TokenSupportUpdated(address indexed token, bool supported);
-    
+
     /// Emitted when senders whitelist status is updated
     event SendersWhitelistUpdated(address indexed user, bool whitelisted);
 
     /// Emitted when recipients whitelist status is updated
     event RecipientsWhitelistUpdated(address indexed user, bool whitelisted);
-    
+
     /// Emitted when supported tokens list is cleared
     event SupportedTokensCleared();
-    
+
     /// Emitted when risk threshold is updated
     event RiskThresholdUpdated(uint256 newThreshold);
 
@@ -88,25 +89,25 @@ contract AlphaAMLBridge is Ownable {
 
     /// Address of the oracle that provides risk scoring
     address public oracle;
-    
+
     /// Required ETH deposit for gas costs (sent directly to oracle)
     uint256 public gasDeposit;
-    
+
     /// Address that receives collected fees
     address public feeRecipient;
 
     /// Address that receives gas payments
     address public gasPaymentsRecipient;
-    
+
     /// Fee in basis points (10 = 0.1%, 100 = 1%)
     uint256 public feeBP = 10; // 10 basis points = 0.1%
-    
+
     /// Risk threshold above which transfers are rejected (0-100)
     uint256 public riskThreshold = 50; // Default risk threshold
 
     /// Counter for generating unique request IDs
     uint256 private _nextRequestId = 1;
-    
+
     /// Mapping from request ID to request details
     mapping(uint256 => Request) private _requests;
 
@@ -145,9 +146,7 @@ contract AlphaAMLBridge is Ownable {
         uint256 _gasDeposit,
         address _feeRecipient,
         address _gasPaymentsRecipient
-    )
-        Ownable(_owner)
-    {
+    ) Ownable(_owner) {
         require(_oracle != address(0), "Oracle=0");
         require(_feeRecipient != address(0), "FeeRecipient=0");
         require(_gasPaymentsRecipient != address(0), "GasPaymentsRecipient=0");
@@ -170,11 +169,11 @@ contract AlphaAMLBridge is Ownable {
      * @notice ETH sent with this call is transferred directly to the oracle for gas costs
      * @notice Total token amount deducted = amount + fee
      */
-    function initiate(
-        address token,
-        uint256 amount,
-        address recipient
-    ) external payable onlyWhitelisted(msg.sender, recipient) {
+    function initiate(address token, uint256 amount, address recipient)
+        external
+        payable
+        onlyWhitelisted(msg.sender, recipient)
+    {
         require(amount > 0, "Amount>0");
         require(msg.value == gasDeposit, "Wrong gas deposit");
         require(_supportedTokens.contains(token), "Token not supported");
@@ -190,15 +189,15 @@ contract AlphaAMLBridge is Ownable {
         uint256 fee = (amount * feeBP) / BASIS_POINTS;
         uint256 amountFromSender = amount + fee;
 
-        Request storage r   = _requests[requestId];
-        r.sender            = msg.sender;
-        r.status            = Status.Initiated;
-        r.token             = token;
-        r.recipient         = recipient;
-        r.amountFromSender  = amountFromSender;
+        Request storage r = _requests[requestId];
+        r.sender = msg.sender;
+        r.status = Status.Initiated;
+        r.token = token;
+        r.recipient = recipient;
+        r.amountFromSender = amountFromSender;
         r.amountToRecipient = amount;
-        r.fee               = fee;
-        r.depositEth        = msg.value;
+        r.fee = fee;
+        r.depositEth = msg.value;
 
         // Transfer tokens from user to contract
         IERC20(token).safeTransferFrom(msg.sender, address(this), amountFromSender);
@@ -263,10 +262,7 @@ contract AlphaAMLBridge is Ownable {
      * @param requestId ID of the request to score
      * @param riskScore Risk score from 0-100 (higher = more risky)
      */
-    function setRiskScore(uint256 requestId, uint96 riskScore)
-        external
-        onlyOracle
-    {
+    function setRiskScore(uint256 requestId, uint96 riskScore) external onlyOracle {
         Request storage r = _requests[requestId];
         require(r.status == Status.Initiated, "Not initiated");
         r.riskScore = riskScore;
@@ -517,9 +513,13 @@ contract AlphaAMLBridge is Ownable {
      * @param toIdx Index of the last token to return
      * @return tokens Array of supported tokens
      */
-    function getSupportedTokensWithIndices(uint256 fromIdx, uint256 toIdx) external view returns (address[] memory tokens) {
+    function getSupportedTokensWithIndices(uint256 fromIdx, uint256 toIdx)
+        external
+        view
+        returns (address[] memory tokens)
+    {
         uint256 length = toIdx - fromIdx + 1;
-        tokens = new address[](length);  // ✅ Initialize the array with correct size!
+        tokens = new address[](length); // ✅ Initialize the array with correct size!
         for (uint256 i = 0; i < length;) {
             tokens[i] = _supportedTokens.at(fromIdx + i);
             unchecked {
@@ -585,7 +585,11 @@ contract AlphaAMLBridge is Ownable {
      * @param toIdx Index of the last sender to return
      * @return users Array of whitelisted senders
      */
-    function getSendersWhitelistWithIndices(uint256 fromIdx, uint256 toIdx) external view returns (address[] memory users) {
+    function getSendersWhitelistWithIndices(uint256 fromIdx, uint256 toIdx)
+        external
+        view
+        returns (address[] memory users)
+    {
         uint256 length = toIdx - fromIdx + 1;
         users = new address[](length);
         for (uint256 i = 0; i < length;) {
@@ -603,7 +607,11 @@ contract AlphaAMLBridge is Ownable {
      * @param toIdx Index of the last recipient to return
      * @return users Array of whitelisted recipients
      */
-    function getRecipientsWhitelistWithIndices(uint256 fromIdx, uint256 toIdx) external view returns (address[] memory users) {
+    function getRecipientsWhitelistWithIndices(uint256 fromIdx, uint256 toIdx)
+        external
+        view
+        returns (address[] memory users)
+    {
         uint256 length = toIdx - fromIdx + 1;
         users = new address[](length);
         for (uint256 i = 0; i < length;) {
@@ -614,7 +622,20 @@ contract AlphaAMLBridge is Ownable {
         }
     }
 
+    /**
+     * @dev Returns the request details
+     * @param requestId ID of the request
+     * @return _ Request details
+     */
     function requests(uint256 requestId) external view returns (Request memory) {
         return _requests[requestId];
+    }
+
+    /**
+     * @dev Returns the next request ID
+     * @return _ Next request ID
+     */
+    function nextRequestId() external view returns (uint256) {
+        return _nextRequestId;
     }
 }

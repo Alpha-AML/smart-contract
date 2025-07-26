@@ -11,7 +11,7 @@ import {Safe as GnosisSafe} from "@safe-global/Safe.sol";
 contract Safe is GnosisSafe {
     // No constructor needed - Safe uses proxy pattern
     // The setup() function will initialize the Safe after deployment
-    constructor() GnosisSafe(){
+    constructor() GnosisSafe() {
         threshold = 0;
     }
 }
