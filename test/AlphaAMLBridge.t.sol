@@ -36,6 +36,12 @@ contract AlphaAMLBridgeTest is Test {
     uint256 public constant MAX_FEE_BP = 1000; // 10%
     uint256 public constant MAX_RISK_SCORE = 100; // 100%
 
+    uint256 public constant SAFE_TX_GAS = 200000;
+    uint256 public constant BASE_GAS = 200000;
+    uint256 public constant GAS_PRICE = 0;
+    address public constant GAS_TOKEN = address(0);
+    address payable public constant REFUND_RECEIVER = payable(address(0));
+
     /*//////////////////////////////////////////////////////////////
                              SETUP
     //////////////////////////////////////////////////////////////*/
@@ -1402,99 +1408,94 @@ contract AlphaAMLBridgeTest is Test {
         uint256 feePercent = bridge.feeBP();
         uint256 expectedFee = (ONE_THOUSAND * feePercent) / BASIS_POINTS;
 
-        uint256 requestId = bridge.nextRequestId();
-
         vm.prank(sender);
         token.approve(address(bridge), ONE_THOUSAND + expectedFee);
         vm.prank(sender);
         bridge.initiate{value: GAS_DEPOSIT}(address(token), ONE_THOUSAND, recipient);
 
-        uint96 riskScore = 25; // Low risk score
-
         // Verify initial state - request should be Initiated
-        AlphaAMLBridge.Request memory initialRequest = bridge.requests(requestId);
+        AlphaAMLBridge.Request memory initialRequest = bridge.requests(1);
         assertEq(uint8(initialRequest.status), uint8(AlphaAMLBridge.Status.Initiated));
         assertEq(initialRequest.riskScore, 0);
 
         // Prepare the transaction data for setRiskScore call
-        bytes memory txData = abi.encodeWithSelector(AlphaAMLBridge.setRiskScore.selector, requestId, riskScore);
+        bytes memory txData = abi.encodeWithSelector(AlphaAMLBridge.setRiskScore.selector, 1, 25);
 
         // Transaction details for Gnosis Safe
-        address to = address(bridge);
-        uint256 value = 0;
         bytes memory data = txData;
-        Enum.Operation operation = Enum.Operation.Call; // CALL operation
-        uint256 safeTxGas = 200000;
-        uint256 baseGas = 200000;
-        uint256 gasPrice = 0;
-        address gasToken = address(0);
-        address payable refundReceiver = payable(address(0));
         uint256 nonce = oracle.nonce();
 
         // Get the transaction hash that needs to be signed
         bytes32 txHash = oracle.getTransactionHash(
-            to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce
+            address(bridge), 0, data, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, nonce
         );
+        bytes memory combinedSignatures;
 
-        // Create signatures from all 3 signers
-        // Signer 1
-        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(signer1, txHash);
-        bytes memory signature1 = abi.encodePacked(r1, s1, v1);
+        {
+            // Create signatures from all 3 signers
+            // Signer 1
+            (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(signer1, txHash);
+            bytes memory signature1 = abi.encodePacked(r1, s1, v1);
 
-        // Signer 2
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(signer2, txHash);
-        bytes memory signature2 = abi.encodePacked(r2, s2, v2);
+            // Signer 2
+            (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(signer2, txHash);
+            bytes memory signature2 = abi.encodePacked(r2, s2, v2);
 
-        // Signer 3
-        (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(signer3, txHash);
-        bytes memory signature3 = abi.encodePacked(r3, s3, v3);
+            // Signer 3
+            (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(signer3, txHash);
+            bytes memory signature3 = abi.encodePacked(r3, s3, v3);
 
-        // Concatenate signatures in the correct order (addresses must be sorted)
-        // For Gnosis Safe, signatures must be sorted by signer address
-        address[] memory signerAddresses = new address[](3);
-        signerAddresses[0] = signer1.addr;
-        signerAddresses[1] = signer2.addr;
-        signerAddresses[2] = signer3.addr;
+            // Concatenate signatures in the correct order (addresses must be sorted)
+            // For Gnosis Safe, signatures must be sorted by signer address
+            address[] memory signerAddresses = new address[](3);
+            signerAddresses[0] = signer1.addr;
+            signerAddresses[1] = signer2.addr;
+            signerAddresses[2] = signer3.addr;
 
-        bytes[] memory signatures = new bytes[](3);
-        signatures[0] = signature1;
-        signatures[1] = signature2;
-        signatures[2] = signature3;
+            bytes[] memory signatures = new bytes[](3);
+            signatures[0] = signature1;
+            signatures[1] = signature2;
+            signatures[2] = signature3;
 
-        // Sort signers and signatures by address too avoid FS026
-        for (uint256 i = 0; i < 3; i++) {
-            for (uint256 j = 0; j < 2 - i; j++) {
-                if (signerAddresses[j] > signerAddresses[j + 1]) {
-                    // Swap addresses
-                    address tempAddr = signerAddresses[j];
-                    signerAddresses[j] = signerAddresses[j + 1];
-                    signerAddresses[j + 1] = tempAddr;
+            // Sort signers and signatures by address too avoid FS026
+            for (uint256 i = 0; i < 3; i++) {
+                for (uint256 j = 0; j < 2 - i; j++) {
+                    if (signerAddresses[j] > signerAddresses[j + 1]) {
+                        // Swap addresses
+                        address tempAddr = signerAddresses[j];
+                        signerAddresses[j] = signerAddresses[j + 1];
+                        signerAddresses[j + 1] = tempAddr;
 
-                    // Swap corresponding signatures
-                    bytes memory tempSig = signatures[j];
-                    signatures[j] = signatures[j + 1];
-                    signatures[j + 1] = tempSig;
+                        // Swap corresponding signatures
+                        bytes memory tempSig = signatures[j];
+                        signatures[j] = signatures[j + 1];
+                        signatures[j + 1] = tempSig;
+                    }
                 }
             }
+
+            // Concatenate all signatures
+            combinedSignatures = abi.encodePacked(signatures[0], signatures[1], signatures[2]);
+        }
+        // Execute the multisig transaction
+        // This should succeed because we have all 3 required signatures
+        vm.expectEmit(true, true, true, true);
+        emit AlphaAMLBridge.RiskScoreSet(1, 25);
+
+        // Execute the multisig transaction
+        {
+            bool success = oracle.execTransaction(
+                address(bridge), 0, data, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, combinedSignatures
+            );
+
+            assertTrue(success, "Multisig transaction should succeed");
         }
 
-        // Concatenate all signatures
-        bytes memory combinedSignatures = abi.encodePacked(signatures[0], signatures[1], signatures[2]);
-
-        // // Execute the multisig transaction
-        // // This should succeed because we have all 3 required signatures
-        // vm.expectEmit(true, true, true, true);
-        // emit AlphaAMLBridge.RiskScoreSet(requestId, riskScore);
-
-        bool success = oracle.execTransaction(
-            to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, combinedSignatures
-        );
-
-        assertTrue(success, "Multisig transaction should succeed");
+        
 
         // Verify the risk score was set correctly
-        AlphaAMLBridge.Request memory finalRequest = bridge.requests(requestId);
-        assertEq(finalRequest.riskScore, riskScore, "Risk score should be set correctly");
+        AlphaAMLBridge.Request memory finalRequest = bridge.requests(1);
+        assertEq(finalRequest.riskScore, 25, "Risk score should be set correctly");
         assertEq(uint8(finalRequest.status), uint8(AlphaAMLBridge.Status.Pending), "Status should be Pending");
 
         // Verify nonce was incremented
@@ -1511,25 +1512,18 @@ contract AlphaAMLBridgeTest is Test {
         vm.prank(sender);
         bridge.initiate{value: GAS_DEPOSIT}(address(token), ONE_THOUSAND, recipient);
 
-        uint256 requestId = 1;
         uint96 riskScore = 25;
 
         // Prepare transaction data
-        bytes memory txData = abi.encodeWithSelector(AlphaAMLBridge.setRiskScore.selector, requestId, riskScore);
+        bytes memory txData = abi.encodeWithSelector(AlphaAMLBridge.setRiskScore.selector, 1, riskScore);
 
         address to = address(bridge);
         uint256 value = 0;
         bytes memory data = txData;
-        Enum.Operation operation = Enum.Operation.Call;
-        uint256 safeTxGas = 200000;
-        uint256 baseGas = 200000;
-        uint256 gasPrice = 0;
-        address gasToken = address(0);
-        address payable refundReceiver = payable(address(0));
         uint256 nonce = oracle.nonce();
 
         bytes32 txHash = oracle.getTransactionHash(
-            to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce
+            address(bridge), 0, data, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, nonce
         );
 
         // Only get 2 signatures (insufficient for 3-of-3 multisig)
@@ -1543,11 +1537,11 @@ contract AlphaAMLBridgeTest is Test {
         // This should fail due to insufficient signatures
         vm.expectRevert();
         oracle.execTransaction(
-            to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, insufficientSignatures
+            address(bridge), 0, data, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, insufficientSignatures
         );
 
         // Verify the risk score was NOT set
-        AlphaAMLBridge.Request memory request = bridge.requests(requestId);
+        AlphaAMLBridge.Request memory request = bridge.requests(1);
         assertEq(request.riskScore, 0, "Risk score should remain unset");
         assertEq(uint8(request.status), uint8(AlphaAMLBridge.Status.Initiated), "Status should remain Initiated");
     }
@@ -1563,11 +1557,10 @@ contract AlphaAMLBridgeTest is Test {
         vm.prank(sender);
         bridge.initiate{value: GAS_DEPOSIT}(address(token), ONE_THOUSAND, recipient);
 
-        uint256 requestId = 1;
         uint96 riskScore = 61; // Above threshold (50)
 
         // Step 2: Multisig sets risk score (same as testMultisig but condensed)
-        bytes memory txData = abi.encodeWithSelector(AlphaAMLBridge.setRiskScore.selector, requestId, riskScore);
+        bytes memory txData = abi.encodeWithSelector(AlphaAMLBridge.setRiskScore.selector, 1, riskScore);
 
         address to = address(bridge);
         uint256 value = 0;
@@ -1583,75 +1576,78 @@ contract AlphaAMLBridgeTest is Test {
             to, value, txData, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce
         );
 
-        // Create signatures from all 3 signers
-        // Signer 1
-        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(signer1, txHash);
-        bytes memory signature1 = abi.encodePacked(r1, s1, v1);
+        bytes memory combinedSignatures;
+        {
+            // Create signatures from all 3 signers
+            // Signer 1
+            (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(signer1, txHash);
+            bytes memory signature1 = abi.encodePacked(r1, s1, v1);
 
-        // Signer 2
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(signer2, txHash);
-        bytes memory signature2 = abi.encodePacked(r2, s2, v2);
+            // Signer 2
+            (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(signer2, txHash);
+            bytes memory signature2 = abi.encodePacked(r2, s2, v2);
 
-        // Signer 3
-        (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(signer3, txHash);
-        bytes memory signature3 = abi.encodePacked(r3, s3, v3);
+            // Signer 3
+            (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(signer3, txHash);
+            bytes memory signature3 = abi.encodePacked(r3, s3, v3);
 
-        // Concatenate signatures in the correct order (addresses must be sorted)
-        // For Gnosis Safe, signatures must be sorted by signer address
-        address[] memory signerAddresses = new address[](3);
-        signerAddresses[0] = signer1.addr;
-        signerAddresses[1] = signer2.addr;
-        signerAddresses[2] = signer3.addr;
+            // Concatenate signatures in the correct order (addresses must be sorted)
+            // For Gnosis Safe, signatures must be sorted by signer address
+            address[] memory signerAddresses = new address[](3);
+            signerAddresses[0] = signer1.addr;
+            signerAddresses[1] = signer2.addr;
+            signerAddresses[2] = signer3.addr;
 
-        bytes[] memory signatures = new bytes[](3);
-        signatures[0] = signature1;
-        signatures[1] = signature2;
-        signatures[2] = signature3;
+            bytes[] memory signatures = new bytes[](3);
+            signatures[0] = signature1;
+            signatures[1] = signature2;
+            signatures[2] = signature3;
 
-        // Sort signers and signatures by address too avoid FS026
-        for (uint256 i = 0; i < 3; i++) {
-            for (uint256 j = 0; j < 2 - i; j++) {
-                if (signerAddresses[j] > signerAddresses[j + 1]) {
-                    // Swap addresses
-                    address tempAddr = signerAddresses[j];
-                    signerAddresses[j] = signerAddresses[j + 1];
-                    signerAddresses[j + 1] = tempAddr;
+            // Sort signers and signatures by address too avoid FS026
+            for (uint256 i = 0; i < 3; i++) {
+                for (uint256 j = 0; j < 2 - i; j++) {
+                    if (signerAddresses[j] > signerAddresses[j + 1]) {
+                        // Swap addresses
+                        address tempAddr = signerAddresses[j];
+                        signerAddresses[j] = signerAddresses[j + 1];
+                        signerAddresses[j + 1] = tempAddr;
 
-                    // Swap corresponding signatures
-                    bytes memory tempSig = signatures[j];
-                    signatures[j] = signatures[j + 1];
-                    signatures[j + 1] = tempSig;
+                        // Swap corresponding signatures
+                        bytes memory tempSig = signatures[j];
+                        signatures[j] = signatures[j + 1];
+                        signatures[j + 1] = tempSig;
+                    }
                 }
             }
-        }
 
-        // Sort signers and signatures by address too avoid FS026
-        for (uint256 i = 0; i < 3; i++) {
-            for (uint256 j = 0; j < 2 - i; j++) {
-                if (signerAddresses[j] > signerAddresses[j + 1]) {
-                    // Swap addresses
-                    address tempAddr = signerAddresses[j];
-                    signerAddresses[j] = signerAddresses[j + 1];
-                    signerAddresses[j + 1] = tempAddr;
+            // Sort signers and signatures by address too avoid FS026
+            for (uint256 i = 0; i < 3; i++) {
+                for (uint256 j = 0; j < 2 - i; j++) {
+                    if (signerAddresses[j] > signerAddresses[j + 1]) {
+                        // Swap addresses
+                        address tempAddr = signerAddresses[j];
+                        signerAddresses[j] = signerAddresses[j + 1];
+                        signerAddresses[j + 1] = tempAddr;
 
-                    // Swap corresponding signatures
-                    bytes memory tempSig = signatures[j];
-                    signatures[j] = signatures[j + 1];
-                    signatures[j + 1] = tempSig;
+                        // Swap corresponding signatures
+                        bytes memory tempSig = signatures[j];
+                        signatures[j] = signatures[j + 1];
+                        signatures[j + 1] = tempSig;
+                    }
                 }
             }
-        }
 
-        // Concatenate all signatures
-        bytes memory combinedSignatures = abi.encodePacked(signatures[0], signatures[1], signatures[2]);
+            // Concatenate all signatures
+            combinedSignatures = abi.encodePacked(signatures[0], signatures[1], signatures[2]);
+        }
 
         // Execute multisig transaction to set risk score
         oracle.execTransaction(
-            to, value, txData, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, combinedSignatures
+            address(bridge), 0, txData, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, combinedSignatures
         );
 
         // Verify risk score was set and status is Pending
-        AlphaAMLBridge.Request memory request = bridge.requests(requestId);
+        AlphaAMLBridge.Request memory request = bridge.requests(1);
         assertEq(request.riskScore, riskScore);
         assertEq(uint8(request.status), uint8(AlphaAMLBridge.Status.Pending));
 
@@ -1662,10 +1658,10 @@ contract AlphaAMLBridgeTest is Test {
         uint256 initialFeeRecipientBalance = token.balanceOf(feeRecipient);
 
         vm.prank(unrelatedAddress);
-        bridge.execute(requestId);
+        bridge.execute(1);
 
         // Step 4: Verify refund (riskScore > threshold)
-        request = bridge.requests(requestId);
+        request = bridge.requests(1);
         assertEq(uint8(request.status), uint8(AlphaAMLBridge.Status.Executed));
         assertEq(token.balanceOf(sender), initialSenderBalance + request.amountFromSender);
         assertEq(token.balanceOf(address(bridge)), initialBridgeBalance - request.amountFromSender);
