@@ -228,7 +228,7 @@ contract AlphaAMLBridge is Ownable {
     }
 
     /**
-     * @dev Oracle executes the transfer based on risk assessment
+     * @dev Executes the transfer based on risk assessment
      * @param requestId ID of the request to execute
      * @notice If approved (risk score < threshold): transfers tokens to recipient and fee to fee recipient
      * @notice If rejected (risk score >= threshold): refunds full amount to user
