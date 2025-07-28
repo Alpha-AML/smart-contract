@@ -4,11 +4,23 @@ require("dotenv").config();
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
-    version: "0.8.20",
+    version: "0.8.28",
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
+        runs: 1337
+      }
+    }
+  },
+  // Add support for Foundry lib imports
+  compilers: {
+    solc: {
+      settings: {
+        remappings: [
+          "@openzeppelin/contracts=lib/openzeppelin-contracts/contracts/",
+          "@safe-global/=lib/safe-contracts/contracts/",
+          "safe-contracts/=lib/safe-contracts/contracts/"
+        ]
       }
     }
   },
