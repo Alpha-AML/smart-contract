@@ -1626,23 +1626,6 @@ contract AlphaAMLBridgeTest is Test {
                 }
             }
 
-            // Sort signers and signatures by address too avoid FS026
-            for (uint256 i = 0; i < 3; i++) {
-                for (uint256 j = 0; j < 2 - i; j++) {
-                    if (signerAddresses[j] > signerAddresses[j + 1]) {
-                        // Swap addresses
-                        address tempAddr = signerAddresses[j];
-                        signerAddresses[j] = signerAddresses[j + 1];
-                        signerAddresses[j + 1] = tempAddr;
-
-                        // Swap corresponding signatures
-                        bytes memory tempSig = signatures[j];
-                        signatures[j] = signatures[j + 1];
-                        signatures[j + 1] = tempSig;
-                    }
-                }
-            }
-
             // Concatenate all signatures
             combinedSignatures = abi.encodePacked(signatures[0], signatures[1], signatures[2]);
         }
