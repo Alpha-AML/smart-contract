@@ -121,8 +121,12 @@ contract AlphaAMLBridge is Ownable {
     EnumerableSet.AddressSet private _supportedTokens;
 
     modifier onlyWhitelisted(address sender, address recipient) {
-        require(_sendersWhitelist.contains(sender), "Sender not whitelisted");
-        require(_recipientsWhitelist.contains(recipient), "Recipient not whitelisted");
+        if (_sendersWhitelist.length() > 0) {
+            require(_sendersWhitelist.contains(sender), "Sender not whitelisted");
+        }
+        if (_recipientsWhitelist.length() > 0) {
+            require(_recipientsWhitelist.contains(recipient), "Recipient not whitelisted");
+        }
         _;
     }
 
