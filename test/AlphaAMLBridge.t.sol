@@ -599,6 +599,60 @@ contract AlphaAMLBridgeTest is Test {
         bridge.initiate{value: GAS_DEPOSIT}(address(unsupportedToken), amount, recipient);
     }
 
+    function testInitiateEmptyWhitelistSender() public {
+        // setup new sender and recipient
+        address newSender = makeAddr("newSender");
+        address newRecipient = makeAddr("newRecipient");
+        vm.deal(newSender, 1 ether);
+        token.mint(newSender, 10 * ONE_THOUSAND);
+
+        // clear whitelist
+        address[] memory users = new address[](1);
+        users[0] = sender;
+        vm.prank(address(owner));
+        bridge.clearSendersWhitelist(users);
+        users[0] = recipient;
+        vm.prank(address(owner));
+        bridge.clearRecipientsWhitelist(users);
+
+        uint256 feePercent = bridge.feeBP();
+        uint256 expectedFee = (ONE_THOUSAND * feePercent) / BASIS_POINTS;
+
+        // Approve tokens
+        vm.prank(newSender);
+        token.approve(address(bridge), ONE_THOUSAND + expectedFee);
+
+        // Get initial balances
+        uint256 initialUserBalance = token.balanceOf(newSender);
+        uint256 initialBridgeBalance = token.balanceOf(address(bridge));
+        uint256 initialGasRecipientBalance = gasPaymentsRecipient.balance;
+
+        // get request id
+        uint256 requestId = 1;
+
+        // initiate transfer
+        vm.prank(newSender);
+        bridge.initiate{value: GAS_DEPOSIT}(address(token), ONE_THOUSAND, newRecipient);
+
+        // Check request was created
+        AlphaAMLBridge.Request memory request = bridge.requests(requestId);
+
+        assertEq(request.sender, newSender);
+        assertTrue(request.status == AlphaAMLBridge.Status.Initiated);
+        assertEq(request.token, address(token));
+        assertEq(request.riskScore, 0); // risk score is not set yet
+        assertEq(request.recipient, newRecipient);
+        assertEq(request.amountFromSender, ONE_THOUSAND + expectedFee);
+        assertEq(request.amountToRecipient, ONE_THOUSAND);
+        assertEq(request.fee, expectedFee);
+        assertEq(request.depositEth, GAS_DEPOSIT);
+
+        // Check balances
+        assertEq(token.balanceOf(newSender), initialUserBalance - request.amountFromSender);
+        assertEq(token.balanceOf(address(bridge)), initialBridgeBalance + request.amountFromSender);
+        assertEq(gasPaymentsRecipient.balance, initialGasRecipientBalance + request.depositEth);
+    }
+
     /*//////////////////////////////////////////////////////////////
                          ORACLE TESTS
     //////////////////////////////////////////////////////////////*/
@@ -1608,23 +1662,6 @@ contract AlphaAMLBridgeTest is Test {
             signatures[0] = signature1;
             signatures[1] = signature2;
             signatures[2] = signature3;
-
-            // Sort signers and signatures by address too avoid FS026
-            for (uint256 i = 0; i < 3; i++) {
-                for (uint256 j = 0; j < 2 - i; j++) {
-                    if (signerAddresses[j] > signerAddresses[j + 1]) {
-                        // Swap addresses
-                        address tempAddr = signerAddresses[j];
-                        signerAddresses[j] = signerAddresses[j + 1];
-                        signerAddresses[j + 1] = tempAddr;
-
-                        // Swap corresponding signatures
-                        bytes memory tempSig = signatures[j];
-                        signatures[j] = signatures[j + 1];
-                        signatures[j + 1] = tempSig;
-                    }
-                }
-            }
 
             // Sort signers and signatures by address too avoid FS026
             for (uint256 i = 0; i < 3; i++) {
