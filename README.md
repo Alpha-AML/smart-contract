@@ -93,10 +93,10 @@ Initiates a new transfer request.
 - **Requirements**: 
   - Token must be supported
   - Amount > 0 (net amount to recipient)
-  - Must send exact `gasDeposit` ETH
+  - Must send exact `gasDeposit` ETH (or other native token)
   - Requires token approval first for `amount + fee`
 - **Effects**: 
-  - ETH sent directly to gas payments recipient
+  - ETH (or other native token) sent directly to gas payments recipient
   - Total tokens (amount + fee) escrowed in contract
   - Request created with "Initiated" status
 
@@ -107,7 +107,7 @@ Cancels a pending transfer request.
 - **Effects**: 
   - Tokens refunded to user
   - Request marked as "Cancelled"
-  - ETH remains with gas payments recipient
+  - ETH (or other native token) remains with gas payments recipient
 
 ### Oracle Functions
 
@@ -138,7 +138,7 @@ Executes or rejects a transfer based on risk assessment.
 
 #### Contract Configuration
 - `setOracle(address _oracle)` - Update oracle address (should be multisig)
-- `setGasDeposit(uint256 _gasDeposit)` - Update required ETH deposit
+- `setGasDeposit(uint256 _gasDeposit)` - Update required ETH (or other native token) deposit
 - `setFeeRecipient(address _feeRecipient)` - Update fee collection address
 - `setGasPaymentsRecipient(address _gasPaymentsRecipient)` - Update gas payments recipient
 - `setFeeBP(uint256 _feeBP)` - Update fee in basis points (max 1000 = 10%)
@@ -222,7 +222,7 @@ Executes or rejects a transfer based on risk assessment.
 
 - **Gas Deposit**: Fixed ETH (or other native token) amount required per transaction
 - **Immediate Transfer**: ETH (or other native token) sent directly to `gasPaymentsRecipient` upon initiation
-- **No Refund**: ETH is not refunded even if transfer is cancelled or rejected
+- **No Refund**: ETH (or other native token) is not refunded even if transfer is cancelled or rejected
 - **Purpose**: Covers oracle operation costs and execution gas
 
 ## Events
@@ -249,8 +249,8 @@ Executes or rejects a transfer based on risk assessment.
 
 ```
 None → Initiated → Pending → Executed
-  ↓        ↓
-Cancelled ← Cancelled
+            ↓         ↓
+       Cancelled ← Cancelled
 ```
 
 - **None**: Initial state (request doesn't exist)
