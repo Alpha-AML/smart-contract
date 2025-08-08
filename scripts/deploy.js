@@ -13,25 +13,30 @@ async function main() {
   console.log("Account balance:", ethers.formatEther(balance), "ETH");
   
   // Get constructor parameters
+  const ownerAddress = deployer.address; // or process.env.OWNER_ADDRESS
   const oracleAddress = process.env.ORACLE_ADDRESS;
   const gasDeposit = process.env.GAS_DEPOSIT;
   const feeRecipient = process.env.FEE_RECIPIENT;
+  const gasPaymentsRecipient = process.env.GAS_PAYMENTS_RECIPIENT;
   
+  console.log("Owner Address:", ownerAddress);
   console.log("Oracle Address:", oracleAddress);
-  console.log("Gas Deposit:", gasDeposit, "wei (", ethers.formatEther(gasDeposit), "ETH )");
+  console.log("Gas Deposit:", gasDeposit);
   console.log("Fee Recipient:", feeRecipient);
+  console.log("Gas Payments Recipient:", gasPaymentsRecipient);
   
   // Deploy the contract with explicit gas settings
   const AlphaAMLBridge = await ethers.getContractFactory("AlphaAMLBridge");
   
   console.log("Deploying contract...");
   const alphaAmlBridge = await AlphaAMLBridge.deploy(
-    oracleAddress,
-    gasDeposit,
-    feeRecipient,
+    ownerAddress,           // _owner
+    oracleAddress,          // _oracle
+    gasDeposit,            // _gasDeposit
+    feeRecipient,          // _feeRecipient
+    gasPaymentsRecipient,  // _gasPaymentsRecipient
     {
-      gasLimit: 5000000, // Set explicit gas limit
-      // Remove gasPrice to use network default
+      gasLimit: 5000000,
     }
   );
   
