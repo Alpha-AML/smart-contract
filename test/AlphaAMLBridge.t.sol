@@ -1487,7 +1487,16 @@ contract AlphaAMLBridgeTest is Test {
 
         // Get the transaction hash that needs to be signed
         bytes32 txHash = oracle.getTransactionHash(
-            address(bridge), 0, data, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, nonce
+            address(bridge),
+            0,
+            data,
+            Enum.Operation.Call,
+            SAFE_TX_GAS,
+            BASE_GAS,
+            GAS_PRICE,
+            GAS_TOKEN,
+            REFUND_RECEIVER,
+            nonce
         );
         bytes memory combinedSignatures;
 
@@ -1545,13 +1554,20 @@ contract AlphaAMLBridgeTest is Test {
         // Execute the multisig transaction
         {
             bool success = oracle.execTransaction(
-                address(bridge), 0, data, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, combinedSignatures
+                address(bridge),
+                0,
+                data,
+                Enum.Operation.Call,
+                SAFE_TX_GAS,
+                BASE_GAS,
+                GAS_PRICE,
+                GAS_TOKEN,
+                REFUND_RECEIVER,
+                combinedSignatures
             );
 
             assertTrue(success, "Multisig transaction should succeed");
         }
-
-        
 
         // Verify the risk score was set correctly
         AlphaAMLBridge.Request memory finalRequest = bridge.requests(1);
@@ -1583,7 +1599,16 @@ contract AlphaAMLBridgeTest is Test {
         uint256 nonce = oracle.nonce();
 
         bytes32 txHash = oracle.getTransactionHash(
-            address(bridge), 0, data, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, nonce
+            address(bridge),
+            0,
+            data,
+            Enum.Operation.Call,
+            SAFE_TX_GAS,
+            BASE_GAS,
+            GAS_PRICE,
+            GAS_TOKEN,
+            REFUND_RECEIVER,
+            nonce
         );
 
         // Only get 2 signatures (insufficient for 3-of-3 multisig)
@@ -1597,7 +1622,16 @@ contract AlphaAMLBridgeTest is Test {
         // This should fail due to insufficient signatures
         vm.expectRevert();
         oracle.execTransaction(
-            address(bridge), 0, data, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, insufficientSignatures
+            address(bridge),
+            0,
+            data,
+            Enum.Operation.Call,
+            SAFE_TX_GAS,
+            BASE_GAS,
+            GAS_PRICE,
+            GAS_TOKEN,
+            REFUND_RECEIVER,
+            insufficientSignatures
         );
 
         // Verify the risk score was NOT set
@@ -1686,7 +1720,16 @@ contract AlphaAMLBridgeTest is Test {
 
         // Execute multisig transaction to set risk score
         oracle.execTransaction(
-            address(bridge), 0, txData, Enum.Operation.Call, SAFE_TX_GAS, BASE_GAS, GAS_PRICE, GAS_TOKEN, REFUND_RECEIVER, combinedSignatures
+            address(bridge),
+            0,
+            txData,
+            Enum.Operation.Call,
+            SAFE_TX_GAS,
+            BASE_GAS,
+            GAS_PRICE,
+            GAS_TOKEN,
+            REFUND_RECEIVER,
+            combinedSignatures
         );
 
         // Verify risk score was set and status is Pending
