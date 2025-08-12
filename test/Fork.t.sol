@@ -10,7 +10,6 @@ import {Vm} from "forge-std/Vm.sol";
 import {console} from "forge-std/console.sol";
 import {Safe} from "lib/safe-contracts/contracts/Safe.sol";
 
-
 contract ForkTest is Test {
     uint256 public blockNumber = 365981150;
     string public RPC_URL = vm.envString("RPC_URL");
@@ -22,9 +21,6 @@ contract ForkTest is Test {
     address public constant signer_1 = 0x463cb2c678Ca6C202Fc479C71929E232bC7Cb97d;
     address public constant signer_2 = 0x07a5FfcD58F71E0cC606c512F005DdC1EAe6492D;
     address public constant signer_3 = 0xB64a4e7E7C8a3CEF11460Fe885407D589AD21179;
-
-    
-
 
     address public constant ALPHA_AML_BRIDGE = 0x0737AEE33BA21Da073459C373181Fd3ed228E6c9;
     address payable public constant MULTISIG_ADDRESS = payable(0x5292746Dfa3f70F6c03364CE4DC17AA3427826E6);
@@ -42,28 +38,35 @@ contract ForkTest is Test {
     function setUp() public {}
 
     function testFork() public {
-
         address wallet_1 = vm.addr(PK_1);
         address wallet_2 = vm.addr(PK_2);
         address wallet_3 = vm.addr(PK_3);
 
-       vm.createSelectFork(RPC_URL, blockNumber);
-// 0xf982b322
-// 0000000000000000000000000000000000000000000000000000000000000014
-// 0000000000000000000000000000000000000000000000000000000000000010
+        vm.createSelectFork(RPC_URL, blockNumber);
+        // 0xf982b322
+        // 0000000000000000000000000000000000000000000000000000000000000014
+        // 0000000000000000000000000000000000000000000000000000000000000010
 
         bytes memory data = abi.encodeWithSelector(AlphaAMLBridge.setRiskScore.selector, requestId, riskScore);
         console.logBytes(data);
-    
+
         Multisig oracle = Multisig(MULTISIG_ADDRESS);
         uint256 nonce = oracle.nonce();
         bytes32 txHash = oracle.getTransactionHash(
-            ALPHA_AML_BRIDGE, 0, data, Enum.Operation.Call, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce
+            ALPHA_AML_BRIDGE,
+            0,
+            data,
+            Enum.Operation.Call,
+            safeTxGas,
+            baseGas,
+            gasPrice,
+            gasToken,
+            refundReceiver,
+            nonce
         );
 
         console.log(nonce);
         console.logBytes32(txHash);
-
 
         (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(PK_1, txHash);
         bytes memory signature1 = abi.encodePacked(r1, s1, v1);
@@ -109,8 +112,31 @@ contract ForkTest is Test {
         bytes memory combinedSignatures = abi.encodePacked(signatures[0], signatures[1], signatures[2]);
 
         vm.prank(signer_1);
-        oracle.execTransaction(ALPHA_AML_BRIDGE, 0, data, Enum.Operation.Call, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, combinedSignatures);
-        bytes memory execData = abi.encodeWithSelector(Safe.execTransaction.selector, ALPHA_AML_BRIDGE, 0, data, Enum.Operation.Call, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, combinedSignatures);
+        oracle.execTransaction(
+            ALPHA_AML_BRIDGE,
+            0,
+            data,
+            Enum.Operation.Call,
+            safeTxGas,
+            baseGas,
+            gasPrice,
+            gasToken,
+            refundReceiver,
+            combinedSignatures
+        );
+        bytes memory execData = abi.encodeWithSelector(
+            Safe.execTransaction.selector,
+            ALPHA_AML_BRIDGE,
+            0,
+            data,
+            Enum.Operation.Call,
+            safeTxGas,
+            baseGas,
+            gasPrice,
+            gasToken,
+            refundReceiver,
+            combinedSignatures
+        );
         console.logBytes(execData);
         // revert();
     }

@@ -120,6 +120,11 @@ contract AlphaAMLBridge is Ownable {
     /// Set of supported tokens
     EnumerableSet.AddressSet private _supportedTokens;
 
+    /// Restricts function access to whitelisted addresses
+    /// NOTE: executing request for users, which are no longer whitelisted is still intended
+    /// if their requests were created before they were removed from whitelist. Same goes for supported tokens.
+    /// @param sender Address of the sender
+    /// @param recipient Address of the recipient
     modifier onlyWhitelisted(address sender, address recipient) {
         if (_sendersWhitelist.length() > 0) {
             require(_sendersWhitelist.contains(sender), "Sender not whitelisted");
@@ -170,7 +175,7 @@ contract AlphaAMLBridge is Ownable {
      * @param token Address of the token to transfer
      * @param amount Net amount to be received by recipient (before fees)
      * @param recipient Destination address for the transfer
-     * @notice ETH sent with this call is transferred directly to the oracle for gas costs
+     * @notice ETH sent with this call is transferred directly to the gasPaymentsRecipient to cover gas costs
      * @notice Total token amount deducted = amount + fee
      */
     function initiate(address token, uint256 amount, address recipient)
@@ -232,7 +237,7 @@ contract AlphaAMLBridge is Ownable {
     }
 
     /**
-     * @dev Executes the transfer based on risk assessment
+     * @dev Executes the transfer based on risk assessment. Anyone can execute after risk score has been set.
      * @param requestId ID of the request to execute
      * @notice If approved (risk score < threshold): transfers tokens to recipient and fee to fee recipient
      * @notice If rejected (risk score >= threshold): refunds full amount to user
@@ -243,7 +248,7 @@ contract AlphaAMLBridge is Ownable {
         r.status = Status.Executed;
 
         // NOTE: executing request for users, which are no longer whitelisted is still intended
-        // if their requests were created before they were removed from whitelist
+        // if their requests were created before they were removed from whitelist. Same goes for supported tokens.
         bool approved = r.riskScore < riskThreshold;
         if (approved) {
             // Transfer approved: send fee to fee recipient and net amount to recipient
@@ -361,19 +366,13 @@ contract AlphaAMLBridge is Ownable {
      */
     function setSupportedTokenBatch(address[] calldata tokens, bool[] calldata supported) external onlyOwner {
         require(tokens.length == supported.length, "Array length mismatch");
-        for (uint256 i = 0; i < tokens.length;) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             require(tokens[i] != address(0), "Token=0");
             if (supported[i] == _supportedTokens.contains(tokens[i])) {
-                unchecked {
-                    ++i;
-                }
                 continue;
             }
             supported[i] ? _supportedTokens.add(tokens[i]) : _supportedTokens.remove(tokens[i]);
             emit TokenSupportUpdated(tokens[i], supported[i]);
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -404,19 +403,13 @@ contract AlphaAMLBridge is Ownable {
      * @param users Array of addresses to add to whitelist
      */
     function addToSendersWhitelistBatch(address[] calldata users) external onlyOwner {
-        for (uint256 i = 0; i < users.length;) {
+        for (uint256 i = 0; i < users.length; i++) {
             require(users[i] != address(0), "User=0");
             if (_sendersWhitelist.contains(users[i])) {
-                unchecked {
-                    ++i;
-                }
                 continue;
             }
             _sendersWhitelist.add(users[i]);
             emit SendersWhitelistUpdated(users[i], true);
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -425,19 +418,13 @@ contract AlphaAMLBridge is Ownable {
      * @param users Array of addresses to add to recipients whitelist
      */
     function addToRecipientsWhitelistBatch(address[] calldata users) external onlyOwner {
-        for (uint256 i = 0; i < users.length;) {
+        for (uint256 i = 0; i < users.length; i++) {
             require(users[i] != address(0), "User=0");
             if (_recipientsWhitelist.contains(users[i])) {
-                unchecked {
-                    ++i;
-                }
                 continue;
             }
             _recipientsWhitelist.add(users[i]);
             emit RecipientsWhitelistUpdated(users[i], true);
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -446,18 +433,12 @@ contract AlphaAMLBridge is Ownable {
      * @param usersToRemove Array of addresses to remove from whitelist
      */
     function clearSendersWhitelist(address[] calldata usersToRemove) external onlyOwner {
-        for (uint256 i = 0; i < usersToRemove.length;) {
+        for (uint256 i = 0; i < usersToRemove.length; i++) {
             if (!_sendersWhitelist.contains(usersToRemove[i])) {
-                unchecked {
-                    ++i;
-                }
                 continue;
             }
             _sendersWhitelist.remove(usersToRemove[i]);
             emit SendersWhitelistUpdated(usersToRemove[i], false);
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -466,18 +447,12 @@ contract AlphaAMLBridge is Ownable {
      * @param usersToRemove Array of addresses to remove from recipients whitelist
      */
     function clearRecipientsWhitelist(address[] calldata usersToRemove) external onlyOwner {
-        for (uint256 i = 0; i < usersToRemove.length;) {
+        for (uint256 i = 0; i < usersToRemove.length; i++) {
             if (!_recipientsWhitelist.contains(usersToRemove[i])) {
-                unchecked {
-                    ++i;
-                }
                 continue;
             }
             _recipientsWhitelist.remove(usersToRemove[i]);
             emit RecipientsWhitelistUpdated(usersToRemove[i], false);
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -522,13 +497,11 @@ contract AlphaAMLBridge is Ownable {
         view
         returns (address[] memory tokens)
     {
+        require(toIdx >= fromIdx, "FromIdx>ToIdx");
         uint256 length = toIdx - fromIdx + 1;
-        tokens = new address[](length); // ✅ Initialize the array with correct size!
-        for (uint256 i = 0; i < length;) {
+        tokens = new address[](length);
+        for (uint256 i = 0; i < length; i++) {
             tokens[i] = _supportedTokens.at(fromIdx + i);
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -594,13 +567,11 @@ contract AlphaAMLBridge is Ownable {
         view
         returns (address[] memory users)
     {
+        require(toIdx >= fromIdx, "FromIdx>ToIdx");
         uint256 length = toIdx - fromIdx + 1;
         users = new address[](length);
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i = 0; i < length; i++) {
             users[i] = _sendersWhitelist.at(fromIdx + i);
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -616,13 +587,11 @@ contract AlphaAMLBridge is Ownable {
         view
         returns (address[] memory users)
     {
+        require(toIdx >= fromIdx, "FromIdx>ToIdx");
         uint256 length = toIdx - fromIdx + 1;
         users = new address[](length);
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i = 0; i < length; i++) {
             users[i] = _recipientsWhitelist.at(fromIdx + i);
-            unchecked {
-                ++i;
-            }
         }
     }
 
