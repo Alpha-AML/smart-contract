@@ -103,6 +103,12 @@ contract AlphaAMLBridgeTest is Test {
         assertEq(bridge.getSupportedTokensWithIndices(0, 0)[0], address(token));
         assertEq(bridge.getSendersWhitelistWithIndices(0, 0)[0], sender);
         assertEq(bridge.getRecipientsWhitelistWithIndices(0, 0)[0], recipient);
+        vm.expectRevert("FromIdx>ToIdx");
+        bridge.getSupportedTokensWithIndices(1, 0);
+        vm.expectRevert("FromIdx>ToIdx");
+        bridge.getSendersWhitelistWithIndices(1, 0);
+        vm.expectRevert("FromIdx>ToIdx");
+        bridge.getRecipientsWhitelistWithIndices(1, 0);
     }
 
     function testDeploymentWithZeroAddresses() public {
