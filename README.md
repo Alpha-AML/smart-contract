@@ -13,6 +13,8 @@ npx hardhat compile
 npx hardhat run scripts/deploy.js --network arbitrum
 ```
 
+Deploy scripts now support: ethereum, arbitrum, base, bsc
+
 ## Contract Verification
 
 After deployment, verify the contract on Etherscan:

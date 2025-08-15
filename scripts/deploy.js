@@ -56,9 +56,11 @@ async function main() {
     await hre.run("verify:verify", {
       address: contractAddress,
       constructorArguments: [
+	ownerAddress,
         oracleAddress,
         gasDeposit,
-        feeRecipient
+        feeRecipient,
+	gasPaymentsRecipient
       ],
     });
     console.log("Contract verified successfully");
